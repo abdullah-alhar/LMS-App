@@ -12,6 +12,13 @@ app.get('/', (req, res) => { //test route
     res.json({ message: 'LMS API is running'});
 });
 
+const userRoutes = require('./routes/userRoutes');
+app.use('/api/users', userRoutes);
+
+const {notFound, errorHandler} = require('./middleware/errorMiddleware');
+app.use(notFound); //catch 404 errors
+app.use(errorHandler); //catch all other errors
+
 const connectDB = require('./config/db');
 
 connectDB()
