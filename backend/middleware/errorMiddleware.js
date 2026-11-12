@@ -26,6 +26,19 @@ const errorHandler = (err, req, res, next) => {
     return res.status(400).json({ message: 'Invalid JSON in request body' });
   }
 
+    // Multer errors (e.g. file too big)
+  if (err.name === 'MulterError') {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'File is too large (max 10 MB)'
+      : err.message;
+    return res.status(400).json({ message });
+  }
+
+  // Our own errors that carry a status code (e.g. wrong file type)
+  if (err.statusCode) {
+    return res.status(err.statusCode).json({ message: err.message });
+  }
+  
   // 5. Anything else = our bug → log it for us, hide details from users
   console.error(err);
   res.status(500).json({ message: 'Server Error' });

@@ -3,6 +3,8 @@ const {
     createCourse, getCourses, getCourse, updateCourse, deleteCourse,
 } = require('../controllers/courseController');
 const { enrol, unenrol, getCourseStudents, getMyCourses } = require('../controllers/enrolmentController');
+const { addMaterial, getMaterials, deleteMaterial } = require('../controllers/materialController');
+const upload = require('../middleware/uploadMiddleware');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -29,5 +31,13 @@ router
     .delete(authorize(['student']), unenrol); //student leaves
 
 router.get('/:id/students', authorize(['lecturer', 'admin']), getCourseStudents); //owner sees who joined
+
+//materials: upload.single('file') must come BEFORE addMaterial (multer fills req.body and req.file)
+router
+    .route('/:id/materials')
+    .get(getMaterials) //owner, admin or enrolled students
+    .post(authorize(['lecturer', 'admin']), upload.single('file'), addMaterial);
+
+router.delete('/:id/materials/:materialId', authorize(['lecturer', 'admin']), deleteMaterial);
 
 module.exports = router;

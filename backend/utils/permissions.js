@@ -4,4 +4,13 @@
 const canManage = (course, user) =>
     user.role === 'admin' || course.lecturer.equals(user._id);
 
-module.exports = { canManage };
+const Enrolment = require('../models/Enrolment');
+
+// Can this user SEE this course's content?
+const canView = async (course, user) => {
+  if (canManage(course, user)) return true;   // owner lecturer or admin
+  const enrolled = await Enrolment.exists({ student: user._id, course: course._id });
+  return Boolean(enrolled);
+};
+
+module.exports = { canManage, canView };

@@ -1,5 +1,7 @@
 const Course = require('../models/Course');
 const Enrolment = require('../models/Enrolment');
+const Material = require('../models/Material');
+const cloudinary = require('../config/cloudinary');
 const { canManage } = require('../utils/permissions');
 
 //lecturer can create a course (post)
@@ -71,7 +73,12 @@ const deleteCourse = async (req, res) => {
         return res.status(403).json({ message: 'You can only delete your own courses' });
     }
 
-    // cascade delete: remove this course's enrolments first so none are left orphaned
+    // cascade delete: remove Cloudinary files, materials and enrolments so none are left orphaned
+    const materials = await Material.find({ course: course._id });
+    for (const m of materials) {
+        if (m.publicId) await cloudinary.uploader.destroy(m.publicId, { resource_type: 'raw' });
+    }
+    await Material.deleteMany({ course: course._id });
     await Enrolment.deleteMany({ course: course._id });
     await course.deleteOne();
     res.status(200).json({ message: 'Course deleted' });
