@@ -16,6 +16,9 @@ const addMaterial = async (req, res) => {
   }
 
   const { title, type, url } = req.body || {};
+  if (!title || !title.trim()) {
+    return res.status(400).json({ message: 'Title is required' });
+  }
   const data = { course: course._id, title, type, uploadedBy: req.user._id };
 
   if (type === 'file') {
