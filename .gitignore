@@ -1,2 +1,27 @@
+# Dependencies
 node_modules
+
+# Secrets (keep .env.example so others know which variables are needed)
 .env
+.env.*
+!.env.example
+
+# Editors
+.vscode
+.idea
+*.swp
+.postman
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+logs
