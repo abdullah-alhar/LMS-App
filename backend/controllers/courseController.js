@@ -1,4 +1,5 @@
 const Course = require('../models/Course');
+const Enrolment = require('../models/Enrolment');
 const { canManage } = require('../utils/permissions');
 
 //lecturer can create a course (post)
@@ -70,6 +71,8 @@ const deleteCourse = async (req, res) => {
         return res.status(403).json({ message: 'You can only delete your own courses' });
     }
 
+    // cascade delete: remove this course's enrolments first so none are left orphaned
+    await Enrolment.deleteMany({ course: course._id });
     await course.deleteOne();
     res.status(200).json({ message: 'Course deleted' });
 };
