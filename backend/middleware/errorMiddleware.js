@@ -6,7 +6,9 @@ const notFound = (req, res, next) => {
 const errorHandler = (err, req, res, next) => {
   // 1. The model's rules failed (required, minlength, match, enum)
   if (err.name === 'ValidationError') {
-    const messages = Object.values(err.errors).map((e) => e.message);
+    const messages = Object.values(err.errors).map((e) =>
+      e.name === 'CastError' ? `${e.path} has an invalid value` : e.message
+    );
     return res.status(400).json({ message: messages.join(', ') });
   }
 

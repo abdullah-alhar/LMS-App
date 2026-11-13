@@ -1,6 +1,7 @@
 const Course = require('../models/Course');
 const Enrolment = require('../models/Enrolment');
 const Material = require('../models/Material');
+const Quiz = require('../models/Quiz');
 const cloudinary = require('../config/cloudinary');
 const { canManage } = require('../utils/permissions');
 
@@ -80,6 +81,7 @@ const deleteCourse = async (req, res) => {
     }
     await Material.deleteMany({ course: course._id });
     await Enrolment.deleteMany({ course: course._id });
+    await Quiz.deleteMany({ course: course._id });
     await course.deleteOne();
     res.status(200).json({ message: 'Course deleted' });
 };
