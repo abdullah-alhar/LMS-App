@@ -4,6 +4,7 @@ const Material = require('../models/Material');
 const Quiz = require('../models/Quiz');
 const cloudinary = require('../config/cloudinary');
 const { canManage } = require('../utils/permissions');
+const QuizAttempt = require('../models/QuizAttempt');
 
 //lecturer can create a course (post)
 const createCourse = async (req, res) => {
@@ -79,6 +80,9 @@ const deleteCourse = async (req, res) => {
     for (const m of materials) {
         if (m.publicId) await cloudinary.uploader.destroy(m.publicId, { resource_type: 'raw' });
     }
+    const quizIds = await Quiz.find({ course: course._id }).distinct('_id');
+    await QuizAttempt.deleteMany({ quiz: { $in: quizIds } });
+
     await Material.deleteMany({ course: course._id });
     await Enrolment.deleteMany({ course: course._id });
     await Quiz.deleteMany({ course: course._id });

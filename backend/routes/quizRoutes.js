@@ -1,4 +1,5 @@
 const express = require('express');
+const { startQuiz, submitQuiz, getMyAttempt, getAttempts } = require('../controllers/attemptController');
 const {
     getQuiz, updateQuiz, setPublished, deleteQuiz,
 } = require('../controllers/quizController');
@@ -8,6 +9,10 @@ const router = express.Router();
 
 router.use(protect); //every route below is protected
 
+router.post('/:quizId/start', authorize(['student']), startQuiz);
+router.post('/:quizId/submit', authorize(['student']), submitQuiz);
+router.get('/:quizId/my-attempt', authorize(['student']), getMyAttempt);
+router.get('/:quizId/attempts', authorize(['lecturer', 'admin']), getAttempts);
 //fixed path /publish is registered before the plain /:quizId route
 router.patch('/:quizId/publish', authorize(['lecturer', 'admin']), setPublished);
 

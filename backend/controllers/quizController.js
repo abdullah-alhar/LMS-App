@@ -1,6 +1,7 @@
 const Course = require('../models/Course');
 const Quiz = require('../models/Quiz');
 const { canManage, canView } = require('../utils/permissions');
+const QuizAttempt = require('../models/QuizAttempt');
 
 // Remove correct answers before sending a quiz to a student
 const hideAnswers = (quiz) => {
@@ -71,6 +72,9 @@ const updateQuiz = async (req, res) => {
   if (quiz.isPublished) {
     return res.status(400).json({ message: 'Unpublish the quiz before editing it' });
   }
+  if (await QuizAttempt.exists({ quiz: quiz._id })) {
+    return res.status(400).json({ message: 'This quiz already has attempts and cannot be edited' });
+  }
 
   const { title, timeLimit, questions } = req.body || {};
   if (title !== undefined) quiz.title = title;
@@ -107,9 +111,9 @@ const deleteQuiz = async (req, res) => {
     return res.status(403).json({ message: 'Only the course lecturer can delete this quiz' });
   }
 
-  // (12B will also delete this quiz's attempts here)
+  await QuizAttempt.deleteMany({ quiz: quiz._id });
   await quiz.deleteOne();
   res.status(200).json({ message: 'Quiz deleted' });
 };
 
-module.exports = { createQuiz, getQuizzes, getQuiz, updateQuiz, setPublished, deleteQuiz };
+module.exports = { createQuiz, getQuizzes, getQuiz, updateQuiz, setPublished, deleteQuiz, hideAnswers };
