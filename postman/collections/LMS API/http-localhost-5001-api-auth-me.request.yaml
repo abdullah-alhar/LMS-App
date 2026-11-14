@@ -6,5 +6,5 @@ method: GET
 auth:
   type: bearer
   credentials:
-    token: abc
+    token: "{{token}}"
 order: 2000
