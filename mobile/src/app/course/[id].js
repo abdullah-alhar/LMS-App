@@ -412,6 +412,18 @@ export default function CourseDetailScreen() {
 
       {isEnrolled || isManager ? (
         <View>
+          <View style={styles.courseCard}>
+            <Text style={styles.sectionTitle}>Quizzes</Text>
+            <Text style={styles.courseDescription}>
+              Take published quizzes or manage the quizzes for this course.
+            </Text>
+            <Link href={`/course-quizzes/${courseId}`} asChild>
+              <Pressable style={styles.button}>
+                <Text style={styles.buttonText}>Open quizzes</Text>
+              </Pressable>
+            </Link>
+          </View>
+
           <Text style={styles.sectionTitle}>Materials</Text>
           {materialsError ? <Text style={styles.message}>{materialsError}</Text> : null}
           {materials.length === 0 && !materialsError ? (
