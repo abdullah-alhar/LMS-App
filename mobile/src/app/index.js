@@ -21,7 +21,7 @@ export default function LoginScreen() {
           await api.get('/auth/me');
           router.replace('/home');
         }
-      } catch (err) {
+      } catch {
         await SecureStore.deleteItemAsync('token');
       } finally {
         setCheckingLogin(false);

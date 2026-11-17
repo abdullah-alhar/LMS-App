@@ -1,36 +1,102 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  Text,
+  View,
+} from 'react-native';
+import { Link, router, useFocusEffect } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import api from '../api/client';
 import styles from '../styles/authStyles';
 
 export default function HomeScreen() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState([]);
+  const [loadingAccount, setLoadingAccount] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [accountError, setAccountError] = useState('');
+  const [courseError, setCourseError] = useState('');
+  const [retryAccountLoad, setRetryAccountLoad] = useState(0);
+
+  const loadMyCourses = useCallback(async () => {
+    setCourseError('');
+    setLoadingCourses(true);
+
+    try {
+      const response = await api.get('/courses/my');
+      setCourses(response.data);
+    } catch (err) {
+      setCourseError(
+        err.response?.data?.message || `Could not load courses: ${err.message}`
+      );
+    } finally {
+      setLoadingCourses(false);
+    }
+  }, []);
+
+  const loadManagedCourses = async (account) => {
+    setCourseError('');
+    setLoadingCourses(true);
+
+    try {
+      const response = await api.get('/courses');
+      const visibleCourses = account.role === 'admin'
+        ? response.data
+        : response.data.filter((course) => course.lecturer?._id === account._id);
+      setCourses(visibleCourses);
+    } catch (err) {
+      setCourseError(
+        err.response?.data?.message || `Could not load courses: ${err.message}`
+      );
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
 
   useEffect(() => {
     const loadUser = async () => {
+      setAccountError('');
+      setLoadingAccount(true);
+
       try {
         const response = await api.get('/auth/me');
         setUser(response.data);
+        if (response.data.role !== 'student') {
+          await loadManagedCourses(response.data);
+        }
       } catch (err) {
-        await SecureStore.deleteItemAsync('token');
-        router.replace('/');
+        if (err.response?.status === 401) {
+          await SecureStore.deleteItemAsync('token');
+          router.replace('/');
+        } else {
+          setAccountError(
+            err.response?.data?.message || `Could not load your account: ${err.message}`
+          );
+        }
       } finally {
-        setLoading(false);
+        setLoadingAccount(false);
       }
     };
 
     loadUser();
-  }, []);
+  }, [retryAccountLoad]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.role === 'student') {
+        loadMyCourses();
+      }
+    }, [user, loadMyCourses])
+  );
 
   const handleLogout = async () => {
     await SecureStore.deleteItemAsync('token');
     router.replace('/');
   };
 
-  if (loading) {
+  if (loadingAccount) {
     return (
       <View style={styles.page}>
         <ActivityIndicator size="large" />
@@ -39,17 +105,116 @@ export default function HomeScreen() {
     );
   }
 
+  if (accountError) {
+    return (
+      <View style={styles.page}>
+        <Text style={styles.title}>LMS App</Text>
+        <Text style={styles.message}>{accountError}</Text>
+        <Pressable
+          style={styles.button}
+          onPress={() => setRetryAccountLoad((attempt) => attempt + 1)}
+        >
+          <Text style={styles.buttonText}>Try again</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   if (!user) return null;
 
   return (
-    <View style={styles.page}>
-      <Text style={styles.title}>LMS App</Text>
-      <Text style={styles.message}>Welcome, {user.name}</Text>
-      <Text style={styles.message}>Role: {user.role}</Text>
+    <View style={styles.dashboardPage}>
+      <View style={styles.dashboardHeader}>
+        <View>
+          <Text style={styles.dashboardTitle}>LMS App</Text>
+          <Text style={styles.dashboardWelcome}>Welcome, {user.name}</Text>
+        </View>
+        <Pressable style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Log out</Text>
+        </Pressable>
+      </View>
 
-      <Pressable style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Log out</Text>
-      </Pressable>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          {user.role === 'student' ? 'My courses' : 'Courses'}
+        </Text>
+        <View style={styles.headerActions}>
+          {user.role === 'lecturer' ? (
+            <Link href="/create-course" asChild>
+              <Pressable style={styles.textButton}>
+                <Text style={styles.textButtonLabel}>Create</Text>
+              </Pressable>
+            </Link>
+          ) : null}
+          {user.role === 'student' ? (
+            <Pressable style={styles.textButton} onPress={loadMyCourses}>
+              <Text style={styles.textButtonLabel}>Refresh</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.textButton}
+              onPress={() => loadManagedCourses(user)}
+            >
+              <Text style={styles.textButtonLabel}>Refresh</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+
+      {loadingCourses ? (
+        <View style={styles.loadingCourses}>
+          <ActivityIndicator size="large" />
+          <Text style={styles.message}>Loading your courses...</Text>
+        </View>
+      ) : courseError ? (
+        <View>
+          <Text style={styles.message}>{courseError}</Text>
+          <Pressable style={styles.button} onPress={loadMyCourses}>
+            <Text style={styles.buttonText}>Try again</Text>
+          </Pressable>
+        </View>
+      ) : courses.length === 0 && user.role === 'student' ? (
+        <View>
+          <Text style={styles.message}>You are not enrolled in any courses yet.</Text>
+          <Link href="/browse-courses" asChild>
+            <Pressable style={styles.button}>
+              <Text style={styles.buttonText}>Browse courses</Text>
+            </Pressable>
+          </Link>
+        </View>
+      ) : courses.length === 0 ? (
+        <Text style={styles.message}>You do not have any courses yet.</Text>
+      ) : (
+        <View style={styles.courseListArea}>
+          {user.role === 'student' ? (
+            <Link href="/browse-courses" asChild>
+              <Pressable style={styles.browseButton}>
+                <Text style={styles.browseButtonText}>Browse all courses</Text>
+              </Pressable>
+            </Link>
+          ) : null}
+          <FlatList
+            data={courses}
+            keyExtractor={(course) => course._id}
+            contentContainerStyle={styles.courseList}
+            renderItem={({ item: course }) => (
+              <Link href={`/course/${course._id}`} asChild>
+                <Pressable style={styles.courseCard}>
+                  <Text style={styles.courseCode}>{course.code}</Text>
+                  <Text style={styles.courseTitle}>{course.title}</Text>
+                  {course.description ? (
+                    <Text style={styles.courseDescription}>{course.description}</Text>
+                  ) : null}
+                  <Text style={styles.courseLecturer}>
+                    Lecturer: {course.lecturer?.name || 'Not listed'}
+                  </Text>
+                  <Text style={styles.courseOpenLabel}>Open course →</Text>
+                </Pressable>
+              </Link>
+            )}
+          />
+        </View>
+      )}
     </View>
   );
 }
