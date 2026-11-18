@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { Link, router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import AppButton from '../components/AppButton';
+import AppTextInput from '../components/AppTextInput';
+import KeyboardForm from '../components/KeyboardForm';
+import LoadingState from '../components/LoadingState';
+import { getCurrentUser, login } from '../services/authService';
+import { clearSessionToken, getSessionToken, saveSessionToken } from '../services/sessionStorage';
+import getErrorMessage from '../utils/getErrorMessage';
+import styles from '../styles';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -15,14 +20,19 @@ export default function LoginScreen() {
   useEffect(() => {
     const restoreLogin = async () => {
       try {
-        const token = await SecureStore.getItemAsync('token');
+        const token = await getSessionToken();
 
         if (token) {
-          await api.get('/auth/me');
+          await getCurrentUser();
           router.replace('/home');
         }
-      } catch {
-        await SecureStore.deleteItemAsync('token');
+      } catch (error) {
+        if (error.response?.status === 401) {
+          await clearSessionToken();
+          setMessage('Your saved session expired. Please log in again.');
+        } else {
+          setMessage(getErrorMessage(error, 'Could not check your saved login'));
+        }
       } finally {
         setCheckingLogin(false);
       }
@@ -33,15 +43,19 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     setMessage('');
+    if (!email.trim() || !password) {
+      setMessage('Enter your email and password.');
+      return;
+    }
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/login', { email, password });
-      await SecureStore.setItemAsync('token', response.data.token);
+      const response = await login({ email: email.trim(), password });
+      await saveSessionToken(response.data.token);
       router.replace('/home');
     } catch (err) {
       setMessage(
-        err.response?.data?.message || `Cannot reach server: ${err.message}`
+        getErrorMessage(err, 'Could not log in')
       );
     } finally {
       setLoading(false);
@@ -50,20 +64,16 @@ export default function LoginScreen() {
 
   if (checkingLogin) {
     return (
-      <View style={styles.page}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.message}>Checking saved login...</Text>
-      </View>
+      <LoadingState message="Checking saved login..." />
     );
   }
 
   return (
-    <View style={styles.page}>
+    <KeyboardForm contentContainerStyle={styles.page}>
       <Text style={styles.title}>LMS App</Text>
       <Text style={styles.subtitle}>Log in to your account</Text>
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Email"
         value={email}
         onChangeText={setEmail}
@@ -72,25 +82,20 @@ export default function LoginScreen() {
         autoCorrect={false}
       />
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
       />
 
-      <Pressable
-        style={[styles.button, loading && styles.buttonDisabled]}
+      <AppButton
         onPress={handleLogin}
         disabled={loading}
+        loading={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Log in</Text>
-        )}
-      </Pressable>
+        <Text style={styles.buttonText}>Log in</Text>
+      </AppButton>
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -99,6 +104,6 @@ export default function LoginScreen() {
           <Text style={styles.secondaryButtonText}>Create an account</Text>
         </Pressable>
       </Link>
-    </View>
+    </KeyboardForm>
   );
 }

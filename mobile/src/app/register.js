@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Link } from 'expo-router';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import AppButton from '../components/AppButton';
+import AppTextInput from '../components/AppTextInput';
+import KeyboardForm from '../components/KeyboardForm';
+import { register } from '../services/authService';
+import getErrorMessage from '../utils/getErrorMessage';
+import styles from '../styles';
 
 export default function RegisterScreen() {
   const [name, setName] = useState('');
@@ -14,10 +18,14 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setMessage('');
+    if (!name.trim() || !email.trim() || !password) {
+      setMessage('Enter your name, email, and password.');
+      return;
+    }
     setLoading(true);
 
     try {
-      await api.post('/auth/register', { name, email, password, role });
+      await register({ name: name.trim(), email: email.trim(), password, role });
       setMessage(
         role === 'lecturer'
           ? 'Account created. An admin must approve your lecturer account before you can log in.'
@@ -26,7 +34,7 @@ export default function RegisterScreen() {
       setPassword('');
     } catch (err) {
       setMessage(
-        err.response?.data?.message || `Cannot reach server: ${err.message}`
+        getErrorMessage(err, 'Could not create your account')
       );
     } finally {
       setLoading(false);
@@ -34,20 +42,18 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.page}>
+    <KeyboardForm contentContainerStyle={styles.page}>
       <Text style={styles.title}>Create account</Text>
       <Text style={styles.subtitle}>Join the LMS</Text>
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Full name"
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
       />
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Email"
         value={email}
         onChangeText={setEmail}
@@ -56,8 +62,7 @@ export default function RegisterScreen() {
         autoCorrect={false}
       />
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Password (at least 6 characters)"
         value={password}
         onChangeText={setPassword}
@@ -68,6 +73,8 @@ export default function RegisterScreen() {
       <View style={styles.roleRow}>
         {['student', 'lecturer'].map((option) => (
           <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: role === option }}
             key={option}
             style={[
               styles.roleButton,
@@ -86,17 +93,13 @@ export default function RegisterScreen() {
         <Text style={styles.message}>Lecturer accounts need admin approval.</Text>
       ) : null}
 
-      <Pressable
-        style={[styles.button, loading && styles.buttonDisabled]}
+      <AppButton
         onPress={handleRegister}
         disabled={loading}
+        loading={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Register</Text>
-        )}
-      </Pressable>
+        <Text style={styles.buttonText}>Register</Text>
+      </AppButton>
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -105,6 +108,6 @@ export default function RegisterScreen() {
           <Text style={styles.secondaryButtonText}>Back to log in</Text>
         </Pressable>
       </Link>
-    </View>
+    </KeyboardForm>
   );
 }

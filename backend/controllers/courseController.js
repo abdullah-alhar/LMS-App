@@ -5,6 +5,8 @@ const Quiz = require('../models/Quiz');
 const cloudinary = require('../config/cloudinary');
 const { canManage } = require('../utils/permissions');
 const QuizAttempt = require('../models/QuizAttempt');
+const Assignment = require('../models/Assignment');
+const AssignmentSubmission = require('../models/AssignmentSubmission');
 
 //lecturer can create a course (post)
 const createCourse = async (req, res) => {
@@ -86,6 +88,15 @@ const deleteCourse = async (req, res) => {
     await Material.deleteMany({ course: course._id });
     await Enrolment.deleteMany({ course: course._id });
     await Quiz.deleteMany({ course: course._id });
+    const assignmentIds = await Assignment.find({ course: course._id }).distinct('_id');
+    const assignmentSubmissions = await AssignmentSubmission.find({ assignment: { $in: assignmentIds } });
+    for (const submission of assignmentSubmissions) {
+        if (submission.publicId) {
+            await cloudinary.uploader.destroy(submission.publicId, { resource_type: 'raw' });
+        }
+    }
+    await AssignmentSubmission.deleteMany({ assignment: { $in: assignmentIds } });
+    await Assignment.deleteMany({ course: course._id });
     await course.deleteOne();
     res.status(200).json({ message: 'Course deleted' });
 };

@@ -7,12 +7,14 @@ import {
   View,
 } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
-import api from '../../api/client';
-import styles from '../../styles/authStyles';
+import { getQuiz, getQuizAttempts } from '../../services/quizService';
+import getErrorMessage from '../../utils/getErrorMessage';
+import getRouteParam from '../../utils/getRouteParam';
+import styles from '../../styles';
 
 export default function QuizResultsScreen() {
   const { quizId: routeQuizId } = useLocalSearchParams();
-  const quizId = Array.isArray(routeQuizId) ? routeQuizId[0] : routeQuizId;
+  const quizId = getRouteParam(routeQuizId);
   const [quiz, setQuiz] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +26,13 @@ export default function QuizResultsScreen() {
     setError('');
     try {
       const [quizResponse, attemptsResponse] = await Promise.all([
-        api.get(`/quizzes/${quizId}`),
-        api.get(`/quizzes/${quizId}/attempts`),
+        getQuiz(quizId),
+        getQuizAttempts(quizId),
       ]);
       setQuiz(quizResponse.data);
       setAttempts(attemptsResponse.data);
     } catch (loadError) {
-      setError(loadError.response?.data?.message || `Could not load results: ${loadError.message}`);
+      setError(getErrorMessage(loadError, 'Could not load results'));
     } finally {
       setLoading(false);
     }

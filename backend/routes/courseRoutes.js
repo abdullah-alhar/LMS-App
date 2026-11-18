@@ -5,6 +5,7 @@ const {
 const { enrol, unenrol, getCourseStudents, getMyCourses } = require('../controllers/enrolmentController');
 const { addMaterial, getMaterials, deleteMaterial } = require('../controllers/materialController');
 const { createQuiz, getQuizzes } = require('../controllers/quizController');
+const { createAssignment, getAssignments } = require('../controllers/assignmentController');
 const upload = require('../middleware/uploadMiddleware');
 const { protect, authorize } = require('../middleware/authMiddleware');
 
@@ -46,5 +47,10 @@ router
     .route('/:id/quizzes')
     .get(getQuizzes) //owner, admin or enrolled students (students see published only)
     .post(authorize(['lecturer', 'admin']), createQuiz);
+
+router
+    .route('/:id/assignments')
+    .get(getAssignments)
+    .post(authorize(['lecturer', 'admin']), createAssignment);
 
 module.exports = router;

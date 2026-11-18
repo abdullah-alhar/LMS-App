@@ -8,8 +8,9 @@ import {
   View,
 } from 'react-native';
 import { Link } from 'expo-router';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import { enrolInCourse, getCourses, getMyCourses } from '../services/courseService';
+import getErrorMessage from '../utils/getErrorMessage';
+import styles from '../styles';
 
 export default function BrowseCoursesScreen() {
   const [courses, setCourses] = useState([]);
@@ -28,15 +29,15 @@ export default function BrowseCoursesScreen() {
 
       try {
         const [allCoursesResponse, myCoursesResponse] = await Promise.all([
-          api.get('/courses'),
-          api.get('/courses/my'),
+          getCourses(),
+          getMyCourses(),
         ]);
 
         setCourses(allCoursesResponse.data);
         setEnrolledIds(new Set(myCoursesResponse.data.map((course) => course._id)));
       } catch (err) {
         setError(
-          err.response?.data?.message || `Could not load courses: ${err.message}`
+          getErrorMessage(err, 'Could not load courses')
         );
       } finally {
         setLoading(false);
@@ -58,7 +59,7 @@ export default function BrowseCoursesScreen() {
     setMessages((current) => ({ ...current, [courseId]: '' }));
 
     try {
-      const response = await api.post(`/courses/${courseId}/enrol`, { enrolKey });
+      const response = await enrolInCourse(courseId, enrolKey);
       setEnrolledIds((current) => new Set(current).add(courseId));
       setEnrolKeys((current) => ({ ...current, [courseId]: '' }));
       setMessages((current) => ({ ...current, [courseId]: response.data.message }));
@@ -68,7 +69,7 @@ export default function BrowseCoursesScreen() {
       }
       setMessages((current) => ({
         ...current,
-        [courseId]: err.response?.data?.message || `Could not enrol: ${err.message}`,
+        [courseId]: getErrorMessage(err, 'Could not enrol'),
       }));
     } finally {
       setLoadingCourse('');

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { Link, router, useLocalSearchParams } from 'expo-router';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import AppTextInput from '../components/AppTextInput';
+import KeyboardForm from '../components/KeyboardForm';
+import { createQuiz, getQuiz, updateQuiz } from '../services/quizService';
+import getErrorMessage from '../utils/getErrorMessage';
+import getRouteParam from '../utils/getRouteParam';
+import styles from '../styles';
 
 const newQuestion = () => ({
   text: '',
@@ -20,8 +17,8 @@ const newQuestion = () => ({
 
 export default function QuizEditorScreen() {
   const params = useLocalSearchParams();
-  const courseId = Array.isArray(params.courseId) ? params.courseId[0] : params.courseId;
-  const quizId = Array.isArray(params.quizId) ? params.quizId[0] : params.quizId;
+  const courseId = getRouteParam(params.courseId);
+  const quizId = getRouteParam(params.quizId);
   const [title, setTitle] = useState('');
   const [timeLimit, setTimeLimit] = useState('10');
   const [questions, setQuestions] = useState([newQuestion()]);
@@ -33,7 +30,7 @@ export default function QuizEditorScreen() {
     if (!quizId) return;
     const loadQuiz = async () => {
       try {
-        const response = await api.get(`/quizzes/${quizId}`);
+        const response = await getQuiz(quizId);
         setTitle(response.data.title);
         setTimeLimit(String(response.data.timeLimit));
         setQuestions(response.data.questions.map((question) => ({
@@ -43,7 +40,7 @@ export default function QuizEditorScreen() {
           marks: String(question.marks),
         })));
       } catch (err) {
-        setMessage(err.response?.data?.message || `Could not load quiz: ${err.message}`);
+        setMessage(getErrorMessage(err, 'Could not load quiz'));
       } finally {
         setLoadingQuiz(false);
       }
@@ -123,11 +120,11 @@ export default function QuizEditorScreen() {
         timeLimit: Number(timeLimit),
         questions: preparedQuestions,
       };
-      if (quizId) await api.patch(`/quizzes/${quizId}`, payload);
-      else await api.post(`/courses/${courseId}/quizzes`, payload);
+      if (quizId) await updateQuiz(quizId, payload);
+      else await createQuiz(courseId, payload);
       router.replace(`/course-quizzes/${courseId}`);
     } catch (err) {
-      setMessage(err.response?.data?.message || `Could not save quiz: ${err.message}`);
+      setMessage(getErrorMessage(err, 'Could not save quiz'));
     } finally {
       setSaving(false);
     }
@@ -143,12 +140,11 @@ export default function QuizEditorScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.detailPage}>
+    <KeyboardForm contentContainerStyle={styles.detailPage}>
       <Link href={`/course-quizzes/${courseId}`} style={styles.textButtonLabel}>‹ Back to quizzes</Link>
       <Text style={styles.title}>{quizId ? 'Edit draft quiz' : 'Create quiz'}</Text>
-      <TextInput style={styles.input} placeholder="Quiz title" value={title} onChangeText={setTitle} maxLength={150} />
-      <TextInput
-        style={styles.input}
+      <AppTextInput placeholder="Quiz title" value={title} onChangeText={setTitle} maxLength={150} />
+      <AppTextInput
         placeholder="Time limit in minutes"
         value={timeLimit}
         onChangeText={setTimeLimit}
@@ -168,8 +164,8 @@ export default function QuizEditorScreen() {
               </Pressable>
             ) : null}
           </View>
-          <TextInput
-            style={[styles.input, styles.multilineInput]}
+          <AppTextInput
+            style={styles.multilineInput}
             placeholder="Question text"
             value={question.text}
             onChangeText={(value) => updateQuestion(questionIndex, { text: value })}
@@ -179,6 +175,9 @@ export default function QuizEditorScreen() {
           {question.options.map((option, optionIndex) => (
             <View key={`option-${questionIndex}-${optionIndex}`} style={styles.optionEditorRow}>
               <Pressable
+                accessibilityRole="radio"
+                accessibilityLabel={`Mark option ${optionIndex + 1} as correct`}
+                accessibilityState={{ checked: question.correctIndex === optionIndex }}
                 style={[
                   styles.correctOptionButton,
                   question.correctIndex === optionIndex && styles.correctOptionSelected,
@@ -189,14 +188,14 @@ export default function QuizEditorScreen() {
                   {question.correctIndex === optionIndex ? '✓' : `${optionIndex + 1}`}
                 </Text>
               </Pressable>
-              <TextInput
-                style={[styles.input, styles.optionInput]}
+              <AppTextInput
+                style={styles.optionInput}
                 placeholder={`Option ${optionIndex + 1}`}
                 value={option}
                 onChangeText={(value) => updateOption(questionIndex, optionIndex, value)}
               />
               {question.options.length > 2 ? (
-                <Pressable style={styles.textButton} onPress={() => removeOption(questionIndex, optionIndex)}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Remove option ${optionIndex + 1}`} style={styles.textButton} onPress={() => removeOption(questionIndex, optionIndex)}>
                   <Text style={styles.dangerButtonText}>×</Text>
                 </Pressable>
               ) : null}
@@ -207,8 +206,8 @@ export default function QuizEditorScreen() {
               <Text style={styles.secondaryButtonText}>Add option</Text>
             </Pressable>
           ) : null}
-          <TextInput
-            style={[styles.input, styles.marksInput]}
+          <AppTextInput
+            style={styles.marksInput}
             placeholder="Marks"
             value={question.marks}
             onChangeText={(value) => updateQuestion(questionIndex, { marks: value })}
@@ -225,6 +224,6 @@ export default function QuizEditorScreen() {
       <Pressable style={styles.button} onPress={handleSave} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{quizId ? 'Save draft' : 'Create draft'}</Text>}
       </Pressable>
-    </ScrollView>
+    </KeyboardForm>
   );
 }

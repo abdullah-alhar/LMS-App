@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, Text } from 'react-native';
 import { Link, router } from 'expo-router';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import AppButton from '../components/AppButton';
+import AppTextInput from '../components/AppTextInput';
+import KeyboardForm from '../components/KeyboardForm';
+import { createCourse } from '../services/courseService';
+import getErrorMessage from '../utils/getErrorMessage';
+import styles from '../styles';
 
 export default function CreateCourseScreen() {
   const [title, setTitle] = useState('');
@@ -29,7 +27,7 @@ export default function CreateCourseScreen() {
     setLoading(true);
 
     try {
-      const response = await api.post('/courses', {
+      const response = await createCourse({
         title: title.trim(),
         code: code.trim().toUpperCase(),
         description: description.trim(),
@@ -38,7 +36,7 @@ export default function CreateCourseScreen() {
       router.replace(`/course/${response.data._id}`);
     } catch (err) {
       setMessage(
-        err.response?.data?.message || `Could not create course: ${err.message}`
+        getErrorMessage(err, 'Could not create course')
       );
     } finally {
       setLoading(false);
@@ -46,34 +44,31 @@ export default function CreateCourseScreen() {
   };
 
   return (
-    <View style={styles.formPage}>
+    <KeyboardForm contentContainerStyle={styles.formPage}>
       <Text style={styles.title}>Create a course</Text>
       <Text style={styles.subtitle}>Students use the enrolment key to join.</Text>
 
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Course title"
         value={title}
         onChangeText={setTitle}
         maxLength={100}
       />
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Course code"
         value={code}
         onChangeText={setCode}
         autoCapitalize="characters"
         autoCorrect={false}
       />
-      <TextInput
-        style={[styles.input, styles.multilineInput]}
+      <AppTextInput
+        style={styles.multilineInput}
         placeholder="Description (optional)"
         value={description}
         onChangeText={setDescription}
         multiline
       />
-      <TextInput
-        style={styles.input}
+      <AppTextInput
         placeholder="Enrolment key"
         value={enrolKey}
         onChangeText={setEnrolKey}
@@ -81,17 +76,13 @@ export default function CreateCourseScreen() {
         autoCorrect={false}
       />
 
-      <Pressable
-        style={[styles.button, loading && styles.buttonDisabled]}
+      <AppButton
         onPress={handleCreate}
         disabled={loading}
+        loading={loading}
       >
-        {loading ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <Text style={styles.buttonText}>Create course</Text>
-        )}
-      </Pressable>
+        <Text style={styles.buttonText}>Create course</Text>
+      </AppButton>
 
       {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -100,6 +91,6 @@ export default function CreateCourseScreen() {
           <Text style={styles.secondaryButtonText}>Cancel</Text>
         </Pressable>
       </Link>
-    </View>
+    </KeyboardForm>
   );
 }

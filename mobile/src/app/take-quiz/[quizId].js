@@ -7,8 +7,11 @@ import {
   View,
 } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
-import api from '../../api/client';
-import styles from '../../styles/authStyles';
+import { getQuiz, getMyQuizAttempt, startQuiz, submitQuiz } from '../../services/quizService';
+import { clearQuizDraft, getQuizDraft, saveQuizDraft } from '../../services/quizDraftStorage';
+import getErrorMessage from '../../utils/getErrorMessage';
+import getRouteParam from '../../utils/getRouteParam';
+import styles from '../../styles';
 
 const formatTime = (seconds) => {
   const minutes = Math.floor(seconds / 60);
@@ -18,7 +21,7 @@ const formatTime = (seconds) => {
 
 export default function TakeQuizScreen() {
   const { quizId: routeQuizId } = useLocalSearchParams();
-  const quizId = Array.isArray(routeQuizId) ? routeQuizId[0] : routeQuizId;
+  const quizId = getRouteParam(routeQuizId);
   const [quiz, setQuiz] = useState(null);
   const [attempt, setAttempt] = useState(null);
   const [attemptStatus, setAttemptStatus] = useState('ready');
@@ -37,10 +40,10 @@ export default function TakeQuizScreen() {
       setLoading(true);
       setError('');
       try {
-        const quizResponse = await api.get(`/quizzes/${quizId}`);
+        const quizResponse = await getQuiz(quizId);
         setQuiz(quizResponse.data);
         try {
-          const attemptResponse = await api.get(`/quizzes/${quizId}/my-attempt`);
+          const attemptResponse = await getMyQuizAttempt(quizId);
           setAttempt(attemptResponse.data);
           setAttemptStatus(
             attemptResponse.data.status === 'in-progress'
@@ -53,7 +56,7 @@ export default function TakeQuizScreen() {
           setAttemptStatus('ready');
         }
       } catch (loadError) {
-        setError(loadError.response?.data?.message || `Could not load quiz: ${loadError.message}`);
+        setError(getErrorMessage(loadError, 'Could not load quiz'));
       } finally {
         setLoading(false);
       }
@@ -67,8 +70,9 @@ export default function TakeQuizScreen() {
     setSubmitting(true);
     setError('');
     try {
-      const response = await api.post(`/quizzes/${quizId}/submit`, { answers });
+      const response = await submitQuiz(quizId, answers);
       setResult(response.data);
+      await clearQuizDraft(quizId);
       setAttemptStatus('submitted');
       setAttempt((current) => ({
         ...current,
@@ -78,10 +82,11 @@ export default function TakeQuizScreen() {
       }));
     } catch (submitError) {
       if (submitError.response?.data?.message?.startsWith('Time is up')) {
+        await clearQuizDraft(quizId);
         setAttemptStatus('expired');
         setAttempt((current) => ({ ...current, status: 'expired' }));
       } else {
-        setError(submitError.response?.data?.message || `Could not submit quiz: ${submitError.message}`);
+        setError(getErrorMessage(submitError, 'Could not submit quiz'));
       }
     } finally {
       setSubmitting(false);
@@ -110,16 +115,19 @@ export default function TakeQuizScreen() {
     setError('');
     submittingRef.current = false;
     try {
-      const response = await api.post(`/quizzes/${quizId}/start`);
+      const response = await startQuiz(quizId);
       setQuiz(response.data.quiz);
       setAttempt({ _id: response.data.attemptId, status: 'in-progress' });
-      setAnswers(response.data.quiz.questions.map(() => null));
+      const savedAnswers = await getQuizDraft(quizId, response.data.quiz.questions.length);
+      const nextAnswers = savedAnswers || response.data.quiz.questions.map(() => null);
+      setAnswers(nextAnswers);
+      await saveQuizDraft(quizId, nextAnswers);
       setEndsAt(response.data.endsAt);
       setSecondsLeft(Math.max(0, Math.ceil((new Date(response.data.endsAt).getTime() - Date.now()) / 1000)));
       setAttemptStatus('in-progress');
       setResult(null);
     } catch (startError) {
-      setError(startError.response?.data?.message || `Could not start quiz: ${startError.message}`);
+      setError(getErrorMessage(startError, 'Could not start quiz'));
     } finally {
       setStarting(false);
     }
@@ -144,6 +152,14 @@ export default function TakeQuizScreen() {
   }
 
   const courseId = typeof quiz.course === 'object' ? quiz.course._id : quiz.course;
+
+  const updateAnswer = (questionIndex, selectedAnswer) => {
+    const nextAnswers = answers.map((answer, index) =>
+      index === questionIndex ? selectedAnswer : answer
+    );
+    setAnswers(nextAnswers);
+    void saveQuizDraft(quizId, nextAnswers);
+  };
 
   if (result) {
     return (
@@ -232,9 +248,10 @@ export default function TakeQuizScreen() {
               <Pressable
                 key={`option-${optionIndex}`}
                 style={[styles.answerOption, selected && styles.answerOptionSelected]}
-                onPress={() => setAnswers((current) => current.map((answer, index) =>
-                  index === questionIndex ? optionIndex : answer
-                ))}
+                accessibilityRole="radio"
+                accessibilityLabel={`${question.text}. ${option}`}
+                accessibilityState={{ checked: selected }}
+                onPress={() => updateAnswer(questionIndex, optionIndex)}
               >
                 <Text style={styles.answerOptionText}>{option}</Text>
               </Pressable>
@@ -243,9 +260,7 @@ export default function TakeQuizScreen() {
           {answers[questionIndex] !== null ? (
             <Pressable
               style={styles.textButton}
-              onPress={() => setAnswers((current) => current.map((answer, index) =>
-                index === questionIndex ? null : answer
-              ))}
+              onPress={() => updateAnswer(questionIndex, null)}
             >
               <Text style={styles.textButtonLabel}>Clear answer</Text>
             </Pressable>

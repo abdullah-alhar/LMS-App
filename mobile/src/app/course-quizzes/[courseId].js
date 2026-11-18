@@ -1,18 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   Text,
   View,
 } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
-import api from '../../api/client';
-import styles from '../../styles/authStyles';
+import ErrorState from '../../components/ErrorState';
+import LoadingState from '../../components/LoadingState';
+import { isCourseManager } from '../../features/courses/courseAccess';
+import { getCurrentUser } from '../../services/authService';
+import { getCourse } from '../../services/courseService';
+import { deleteQuiz as deleteQuizRequest, getCourseQuizzes, getMyQuizAttempt, setQuizPublished } from '../../services/quizService';
+import getErrorMessage from '../../utils/getErrorMessage';
+import getRouteParam from '../../utils/getRouteParam';
+import styles from '../../styles';
 
 export default function CourseQuizzesScreen() {
   const { courseId: routeCourseId } = useLocalSearchParams();
-  const courseId = Array.isArray(routeCourseId) ? routeCourseId[0] : routeCourseId;
+  const courseId = getRouteParam(routeCourseId);
   const [course, setCourse] = useState(null);
   const [quizzes, setQuizzes] = useState([]);
   const [user, setUser] = useState(null);
@@ -28,9 +34,9 @@ export default function CourseQuizzesScreen() {
     setError('');
     try {
       const [courseResponse, userResponse, quizzesResponse] = await Promise.all([
-        api.get(`/courses/${courseId}`),
-        api.get('/auth/me'),
-        api.get(`/courses/${courseId}/quizzes`),
+        getCourse(courseId),
+        getCurrentUser(),
+        getCourseQuizzes(courseId),
       ]);
       setCourse(courseResponse.data);
       setUser(userResponse.data);
@@ -40,7 +46,7 @@ export default function CourseQuizzesScreen() {
         loadedQuizzes = await Promise.all(
           loadedQuizzes.map(async (quiz) => {
             try {
-              const attemptResponse = await api.get(`/quizzes/${quiz._id}/my-attempt`);
+              const attemptResponse = await getMyQuizAttempt(quiz._id);
               return { ...quiz, myAttempt: attemptResponse.data };
             } catch (attemptError) {
               if (attemptError.response?.status === 404) return quiz;
@@ -51,7 +57,7 @@ export default function CourseQuizzesScreen() {
       }
       setQuizzes(loadedQuizzes);
     } catch (loadError) {
-      setError(loadError.response?.data?.message || `Could not load quizzes: ${loadError.message}`);
+      setError(getErrorMessage(loadError, 'Could not load quizzes'));
     } finally {
       setLoading(false);
     }
@@ -66,13 +72,11 @@ export default function CourseQuizzesScreen() {
     setActionQuizId(quiz._id);
     setMessage('');
     try {
-      await api.patch(`/quizzes/${quiz._id}/publish`, {
-        isPublished: !quiz.isPublished,
-      });
+      await setQuizPublished(quiz._id, !quiz.isPublished);
       setMessage(quiz.isPublished ? 'Quiz unpublished.' : 'Quiz published.');
       await loadQuizzes();
     } catch (actionError) {
-      setMessage(actionError.response?.data?.message || `Could not update quiz: ${actionError.message}`);
+      setMessage(getErrorMessage(actionError, 'Could not update quiz'));
     } finally {
       setActionQuizId('');
     }
@@ -82,38 +86,30 @@ export default function CourseQuizzesScreen() {
     setActionQuizId(quizId);
     setMessage('');
     try {
-      await api.delete(`/quizzes/${quizId}`);
+      await deleteQuizRequest(quizId);
       setConfirmDeleteId('');
       setMessage('Quiz deleted.');
       await loadQuizzes();
     } catch (actionError) {
-      setMessage(actionError.response?.data?.message || `Could not delete quiz: ${actionError.message}`);
+      setMessage(getErrorMessage(actionError, 'Could not delete quiz'));
     } finally {
       setActionQuizId('');
     }
   };
 
-  const isManager = user?.role === 'admin' ||
-    String(course?.lecturer?._id || course?.lecturer) === String(user?._id);
+  const isManager = isCourseManager(course, user);
 
   if (loading) {
-    return (
-      <View style={styles.page}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.message}>Loading quizzes...</Text>
-      </View>
-    );
+    return <LoadingState message="Loading quizzes..." />;
   }
 
   if (error) {
     return (
-      <View style={styles.page}>
-        <Text style={styles.title}>Quizzes</Text>
-        <Text style={styles.message}>{error}</Text>
-        <Pressable style={styles.button} onPress={() => setRetry((count) => count + 1)}>
-          <Text style={styles.buttonText}>Try again</Text>
-        </Pressable>
-      </View>
+      <ErrorState
+        title="Quizzes"
+        message={error}
+        onRetry={() => setRetry((count) => count + 1)}
+      />
     );
   }
 

@@ -7,9 +7,13 @@ import {
   View,
 } from 'react-native';
 import { Link, router, useFocusEffect } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import api from '../api/client';
-import styles from '../styles/authStyles';
+import ErrorState from '../components/ErrorState';
+import LoadingState from '../components/LoadingState';
+import { getCurrentUser } from '../services/authService';
+import { clearSessionToken } from '../services/sessionStorage';
+import { getCourses, getMyCourses } from '../services/courseService';
+import getErrorMessage from '../utils/getErrorMessage';
+import styles from '../styles';
 
 export default function HomeScreen() {
   const [user, setUser] = useState(null);
@@ -25,11 +29,11 @@ export default function HomeScreen() {
     setLoadingCourses(true);
 
     try {
-      const response = await api.get('/courses/my');
+      const response = await getMyCourses();
       setCourses(response.data);
     } catch (err) {
       setCourseError(
-        err.response?.data?.message || `Could not load courses: ${err.message}`
+        getErrorMessage(err, 'Could not load courses')
       );
     } finally {
       setLoadingCourses(false);
@@ -41,14 +45,14 @@ export default function HomeScreen() {
     setLoadingCourses(true);
 
     try {
-      const response = await api.get('/courses');
+      const response = await getCourses();
       const visibleCourses = account.role === 'admin'
         ? response.data
         : response.data.filter((course) => course.lecturer?._id === account._id);
       setCourses(visibleCourses);
     } catch (err) {
       setCourseError(
-        err.response?.data?.message || `Could not load courses: ${err.message}`
+        getErrorMessage(err, 'Could not load courses')
       );
     } finally {
       setLoadingCourses(false);
@@ -61,18 +65,18 @@ export default function HomeScreen() {
       setLoadingAccount(true);
 
       try {
-        const response = await api.get('/auth/me');
+        const response = await getCurrentUser();
         setUser(response.data);
         if (response.data.role !== 'student') {
           await loadManagedCourses(response.data);
         }
       } catch (err) {
         if (err.response?.status === 401) {
-          await SecureStore.deleteItemAsync('token');
+          await clearSessionToken();
           router.replace('/');
         } else {
           setAccountError(
-            err.response?.data?.message || `Could not load your account: ${err.message}`
+            getErrorMessage(err, 'Could not load your account')
           );
         }
       } finally {
@@ -92,31 +96,21 @@ export default function HomeScreen() {
   );
 
   const handleLogout = async () => {
-    await SecureStore.deleteItemAsync('token');
+    await clearSessionToken();
     router.replace('/');
   };
 
   if (loadingAccount) {
-    return (
-      <View style={styles.page}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.message}>Loading your account...</Text>
-      </View>
-    );
+    return <LoadingState message="Loading your account..." />;
   }
 
   if (accountError) {
     return (
-      <View style={styles.page}>
-        <Text style={styles.title}>LMS App</Text>
-        <Text style={styles.message}>{accountError}</Text>
-        <Pressable
-          style={styles.button}
-          onPress={() => setRetryAccountLoad((attempt) => attempt + 1)}
-        >
-          <Text style={styles.buttonText}>Try again</Text>
-        </Pressable>
-      </View>
+      <ErrorState
+        title="LMS App"
+        message={accountError}
+        onRetry={() => setRetryAccountLoad((attempt) => attempt + 1)}
+      />
     );
   }
 

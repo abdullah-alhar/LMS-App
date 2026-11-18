@@ -25,6 +25,9 @@ app.use('/api/courses', courseRoutes);
 const quizRoutes = require('./routes/quizRoutes');
 app.use('/api/quizzes', quizRoutes);
 
+const assignmentRoutes = require('./routes/assignmentRoutes');
+app.use('/api/assignments', assignmentRoutes);
+
 //error handling middleware (always LAST, after every route)
 const {notFound, errorHandler} = require('./middleware/errorMiddleware');
 app.use(notFound); //catch 404 errors
